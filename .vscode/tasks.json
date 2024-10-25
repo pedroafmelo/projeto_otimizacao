@@ -1,0 +1,16 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Python Virtual Environment",
+            "type": "shell",
+            "command": "./.vscode/tasks.sh",
+            "presentation": {
+                "focus": true,
+                "clear": true,
+                "echo": false
+            }
+        }
+    ],
+    "inputs": []
+}

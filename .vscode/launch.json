@@ -1,0 +1,13 @@
+{
+    "version": "2.0.0",
+    "configurations":[
+        {
+            "name": "Otimização de Carteira",
+            "preLaunchTask": "Python Virtual Environment",
+            "request": "launch",
+            "type": "debugpy",
+            "program": "./main.py",
+            "console": "integratedTerminal"
+        }
+    ]
+}

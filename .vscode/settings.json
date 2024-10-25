@@ -28,6 +28,7 @@
       "editor.codeActionsOnSave": {
         "source.organizeImports": "never"
       },
+      "editor.defaultFormatter": "ms-python.autopep8"
     },
     "python.testing.pytestArgs": ["src"],
     "python.testing.pytestEnabled": false,
