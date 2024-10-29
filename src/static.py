@@ -42,9 +42,3 @@ class StaticVariables:
         self.electricals = ["TAEE11", "EGIE3", "CMIG4", "CPLE6", "CPFE3"]
 
         self.others = ["VIVT3", "CSNA3", "VALE3", "GGBR4", "VBBR3", "CYRE3", "GOAU4", "PETR4", "MRFG3"]
-
-
-
-static = StaticVariables()
-
-print(static.data_dy_mean)

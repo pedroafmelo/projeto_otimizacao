@@ -1,12 +1,10 @@
 # -*- coding: UTF-8 -*-
 """Import modules"""
-import yfinance as yf
-import numpy as np 
-import matplotlib.pyplot as plt 
-import datetime as dt 
+import datetime as dt
+from os import path
+
+import numpy as np
 import pandas as pd
-from scipy.optimize import minimize 
-import matplotlib.ticker as mtick
 
 
 class Mark:
@@ -38,69 +36,121 @@ class Mark:
         """execute class
         routine"""
 
-        self.__transform_data()
-        self._get_results()
+        self.__optimize()
+        self._get__results(self.__check_contraints())
 
 
-        """O uso do retorno logarítmico lineariza a nossa relação de retorno e,
-            dessa forma, podemos acumular retorno apenas somando-os
-
-            obs: depois voltaremos para o retorno aritmético para que possamos
-            ter noção da sensibilidade do retorno de fato"""
-
-        """Uma ideia para projetar retornos futuros sem ser pela média passada seria justamente utilizar
-            a TIR, a taxa interna de rentabilidade lá do Valuation da companhia
-        """
-
-
-    def __optimize(self):
-        """Download data"""
-
+    def __optimize(self) -> str:
+        """Use grid search model
+        optimize sharpe ratio"""
 
         # important initial configurations
-        dy_data = pd.read_excel(self.static.data_dy_mean)
-        dy_mad_data = pd.read_excel(self.static.data_dy_mad)
-        price_mad_data = pd.read_excel(self.static.data_price_mad)
+        from src.optimize import OptimizeDY
 
-        weight_vector = self.__get_weighs()
-        dy_mad_vector = np.array(dy_mad_data["dy_mad"])
-        price_mad_vector = np.array(price_mad_data["pr_mad"])
+        data_index = OptimizeDY()._transform_data()
+
+        weight_vector = OptimizeDY()._get_weighs()
+        dy_return_verctor = np.array(data_index["dy_medio"])
+        dy_mad_vector = np.array(data_index["dy_mad"])
+        price_mad_vector = np.array(data_index["pr_mad"])
+
+        # number of random weights combinations
+        num_carteiras = 100_000
+
+        # creating vectors
+        exp_return_vector = np.zeros(num_carteiras)
+        exp_dy_mad_vector = np.zeros(num_carteiras)
+        exp_pr_mad_vector = np.zeros(num_carteiras)
+        sharpe_vector = np.zeros(num_carteiras)
+        weight_matrix = np.zeros((num_carteiras, len(weight_vector)))
+
+        for k in range(num_carteiras):
+            
+            # kind of a grid search
+            pesos = np.random.random(len(weight_vector)) 
+            pesos = pesos/np.sum(pesos) # normalizing weights
+            weight_matrix[k, :] = pesos
+
+            exp_return_vector[k] = np.sum(dy_return_verctor * pesos) 
+            exp_dy_mad_vector[k] = np.sum(dy_mad_vector * pesos)
+            exp_pr_mad_vector[k] = np.sum(price_mad_vector * pesos)
+
+            sharpe_vector[k] = (exp_return_vector[k] - 0.06)/(exp_dy_mad_vector[k])
+
+        self.exp_return_vector = exp_return_vector
+        self.exp_dy_mad_vector = exp_dy_mad_vector
+        self.exp_pr_mad_vector = exp_pr_mad_vector
+        self.sharpe_vector = sharpe_vector
+        self.weight_matrix = weight_matrix
+
+        return "Optimized portfolio"
+
+
+    def __check_contraints(self):
+        """check constraints
+        in vector's values"""
+
+        # important initial configurations
+        from src.optimize import OptimizeDY
+
+        data_index = OptimizeDY()._transform_data()
+
+        weight_vector = OptimizeDY()._get_weighs()
+        dy_mad_vector = np.array(data_index["dy_mad"])
+        price_mad_vector = np.array(data_index["pr_mad"])
 
         dy_mad_indice = float(sum(weight_vector * dy_mad_vector))
         pr_mad_indice = float(sum(weight_vector * price_mad_vector))
 
-        financials = self.static.financials
-        electricals = self.static.electricals
-        others = self.static.others
+        financials = [2, 3, 5, 6, 7, 8]
+        electricals = [0, 4, 8, 9, 10]
+        others = [1, 11, 12, 13, 14, 15, 16, 18, 19]
 
-        all_assets = financials + electricals + others
+        arrays = [
+            "exp_return_vector",
+            "exp_dy_mad_vector",
+            "exp_pr_mad_vector",
+            "sharpe_vector",
+        ]
 
-        num_carteiras = 100_000
+        setores = [financials, electricals, others]
 
-        tabela_ret_esp = np.zeros(num_carteiras)
-        tabela_vols_esp = np.zeros(num_carteiras)
+        while True:
+            best_sharpe = self.sharpe_vector.argmax()
+            best_weight = self.weight_matrix[best_sharpe]
 
-        tabela_sharpe = np.zeros(num_carteiras)
-        tabela_pesos = np.zeros((num_carteiras, len(lista_acoes)))
+            if (
+                any(x > 0.2 for x in best_weight)
+                or np.sum(best_weight * dy_mad_vector) >= dy_mad_indice
+                or np.sum(best_weight * price_mad_vector) >= pr_mad_indice
+                ):
+                for attr in arrays:
+                    setattr(self, attr, np.delete(getattr(self, attr), best_sharpe))
+                self.weight_matrix = np.delete(self.weight_matrix, best_sharpe, axis=0)
+            
 
-        for sample_wallet in range(num_carteiras):
+            elif any(any(best_weight[i] > 0.5 for i in setor) for setor in setores):
+                for attr in arrays:
+                    setattr(self, attr, np.delete(getattr(self, attr), best_sharpe))
+                self.weight_matrix = np.delete(self.weight_matrix, best_sharpe, axis=0)
+            
+            else:
+                print("Found a viable solution for the portfolio weights")
+                break
 
-            pesos = np.random.random(len(lista_acoes))
-            pesos = pesos/np.sum(pesos) # normalizing
-            tabela_pesos[sample_wallet, :] = pesos
+        return best_sharpe
+    
+    def _get__results(self, best_sharpe) -> str:
+        
+        results_df = pd.DataFrame()
+        results_df = results_df.assign(
+            retorno_carteira = [self.exp_return_vector[best_sharpe]],
+            mad_dy_carteira = [self.exp_dy_mad_vector[best_sharpe]],
+            mad_preco_carteira = [self.exp_pr_mad_vector[best_sharpe]],
+            mad_total_carteira = [self.exp_dy_mad_vector[best_sharpe] + self.exp_pr_mad_vector[best_sharpe]],
+            sharpe_ratio = self.sharpe_vector[best_sharpe]
+        )
 
-            tabela_ret_esp[sample_wallet] = np.sum(media_retornos * pesos * 252) # anualize by capital market year (cause returns are log)
-            tabela_vols_esp[sample_wallet] = np.sqrt(np.dot(pesos.T, np.dot(matriz_cov*252, pesos))) #dot é produto de matrizes
-            # produto duplo, calculo de volatilidade anualizada ponderada pelos pesos dos ativos, raíz disso é std
+        results_df.to_excel(path.join(self.static.data_dir, "resultados_markowitz.xlsx"), float_format="%.8f")
 
-            tabela_sharpe[sample_wallet] = tabela_ret_esp[sample_wallet]/tabela_vols_esp[sample_wallet]
-
-
-        sharpe_max = tabela_sharpe.argmax()
-
-        tabela_pesos[sharpe_max]
-
-
-        tabela_ret_esp_arit = np.exp(tabela_ret_esp) - 1
-
-        tabela_vols_esp[sharpe_max]
+        return "Results spreadsheet done"

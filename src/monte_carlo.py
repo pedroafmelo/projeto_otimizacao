@@ -1,32 +1,36 @@
-import numpy as np
-import matplotlib.pyplot as plt
+# -*- coding: UTF-8 -*- 
+"""Import modules"""
 import datetime as dt
-import yfinance as yf 
+
+import matplotlib.pyplot as plt
+import numpy as np
+import yfinance as yf
 from numpy import linalg as LA
 
 
-lista_acoes = ["WEGE3", "PCAR3", "LREN3", "PETR4", "VALE3"]
-lista_acoes = [acao + ".SA" for acao in lista_acoes]
+class MonteCarlo:
+    """Monte Carlo
+    Simulation class"""
 
-data_final = dt.datetime.now()
-data_inicial = data_final - dt.timedelta(days=300)
+    # import local modules
+    from src.static import StaticVariables
+    static = StaticVariables()
 
-precos = yf.download(lista_acoes, data_inicial, data_final)["Adj Close"]
+lista_acoes = static.financials + static.electricals + static.others
 
-retornos = precos.pct_change().dropna()
-media_retornos = retornos.mean()
+#
+retornos = "ADICIONAR VETOR DE RETORNOS"
 matriz_cov = retornos.cov()
+#
+
 pesos_carteira = np.full(len(lista_acoes), 1/len(lista_acoes))
 numero_acoes = len(lista_acoes)
-
-pesos_carteira
-
 
 num_sim = 10_000
 dias_projetados = 252
 capital_inicial = 1000
 
-retorno_medio = retornos.mean(axis=0).to_numpy() # transforma em vetor
+retorno_medio = retornos.mean(axis=0).to_numpy() # transforma em vetor -> aqui entra o vetor de retornos do dy
 matriz_retorno_medio = retorno_medio * np.ones(shape=(dias_projetados, numero_acoes)) # gera matriz cheia dos retornos médios
 
 L = LA.cholesky(matriz_cov) # triangulariz cov_matrix para correlacionar retornos sintéticos
