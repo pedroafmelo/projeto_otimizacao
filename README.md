@@ -14,6 +14,6 @@ O documento de instruções para a realização do projeto está na pasta "docs"
 ## Principais requisitos:
 
 - [Python](https://docs.python.org/3/)
-- [Pyomo](hhttps://docs.reportlab.com/)
-- [Numpy](https://www.statsmodels.org/stable/api.html)
+- [Pyomo](https://pyomo.readthedocs.io/en/stable/)
+- [Numpy](https://numpy.org/doc/)
 - [Matplotlib](https://matplotlib.org/stable/index.html)

@@ -120,7 +120,6 @@ class OptimizeDY:
 
 
     def _pyo_optimize(self, weight_vector: np.array, 
-                       returns_vector: np.array,
                        data_index: pd.DataFrame,
                        individua_max_concentration: float,
                        sector_max_concentration: float) -> pyo.ConcreteModel:
@@ -142,7 +141,7 @@ class OptimizeDY:
 
             all_assets = financials + electricals + others
 
-            returns_dict = {ticker:dy for ticker, dy in zip(data_index["ticker"], returns_vector)}
+            returns_dict = {ticker:dy for ticker, dy in zip(data_index["ticker"], data_index["dy_medio"])}
             dy_mad_dict = {ticker:mad for ticker, mad in zip(data_index["ticker"], data_index["dy_mad"])}
             pr_mad_dict = {ticker:mad for ticker, mad in zip(data_index["ticker"], data_index["pr_mad"])}
         
@@ -194,12 +193,11 @@ class OptimizeDY:
         return None"""
 
         weight_vector = self._get_weighs()
-        returns_vector = data_index["dy_medio"]
-
+        
         rfr = 0.06 # risk-free rate
         
         begin_time = time.time()
-        model = self._pyo_optimize(weight_vector, returns_vector, data_index, 
+        model = self._pyo_optimize(weight_vector, data_index, 
                                    individua_max_concentration,
                                    sector_max_concentration)
         elapsed_time = time.time() - begin_time
