@@ -13,6 +13,10 @@ class StaticVariables:
     data_dir = path.join(
         path.dirname(path.dirname(__file__)), "data"
         )
+    
+    data_results_dir = path.join(
+        path.dirname(path.dirname(__file__)), "data_results"
+        )
 
     data_dy_mean: str = path.join(data_dir, "dy_mean.xlsx"
     )

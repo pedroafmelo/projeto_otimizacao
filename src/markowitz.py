@@ -2,6 +2,7 @@
 """Import modules"""
 import datetime as dt
 from os import path
+import time
 
 import numpy as np
 import pandas as pd
@@ -49,6 +50,8 @@ class Mark:
 
         data_index = OptimizeDY()._transform_data()
 
+        begin_time = time.time()
+
         weight_vector = OptimizeDY()._get_weighs()
         dy_return_verctor = np.array(data_index["dy_medio"])
         dy_mad_vector = np.array(data_index["dy_mad"])
@@ -83,7 +86,9 @@ class Mark:
         self.sharpe_vector = sharpe_vector
         self.weight_matrix = weight_matrix
 
-        return "Optimized portfolio"
+        self.elapsed_time = time.time() - begin_time
+
+        return "Markowitz optimization done"
 
 
     def __check_contraints(self):
@@ -136,6 +141,7 @@ class Mark:
             
             else:
                 print("Found a viable solution for the portfolio weights")
+                print(best_weight)
                 break
 
         return best_sharpe
@@ -148,9 +154,10 @@ class Mark:
             mad_dy_carteira = [self.exp_dy_mad_vector[best_sharpe]],
             mad_preco_carteira = [self.exp_pr_mad_vector[best_sharpe]],
             mad_total_carteira = [self.exp_dy_mad_vector[best_sharpe] + self.exp_pr_mad_vector[best_sharpe]],
-            sharpe_ratio = self.sharpe_vector[best_sharpe]
+            sharpe_ratio = [self.sharpe_vector[best_sharpe]],
+            tempo_execucao = [self.elapsed_time]
         )
-
-        results_df.to_excel(path.join(self.static.data_dir, "resultados_markowitz.xlsx"), float_format="%.8f")
+    
+        results_df.to_excel(path.join(self.static.data_results_dir, "resultados_markowitz.xlsx"), float_format="%.8f")
 
         return "Results spreadsheet done"

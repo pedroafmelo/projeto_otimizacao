@@ -1,4 +1,7 @@
 *env/
 .env
-# *.ipynb
+*.ipynb
 __pycache__/
+*bkp/
+sensibility.py
+*notes/

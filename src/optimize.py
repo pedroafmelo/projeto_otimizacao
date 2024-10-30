@@ -2,6 +2,7 @@
 """Import modules"""
 from io import StringIO
 from os import path
+import time
 
 import numpy as np
 import pandas as pd
@@ -38,8 +39,25 @@ class OptimizeDY:
         """execute class
         routine"""
 
-        self._transform_data()
-        self._get_results()
+        data_index = self._transform_data()
+        self._get_results(data_index, "resultados_otimizacao_pyomo", 0.2, 0.5)
+
+        data_index_optimistic = self._transform_data()
+        data_index_optimistic = data_index_optimistic.assign(
+                dy_medio = lambda x: x["dy_medio"] * 1.10,
+                dy_mad = lambda x: x["dy_mad"] * 0.9,
+                pr_mad = lambda x: x["pr_mad"] * 0.8
+        )
+        self._get_results(data_index_optimistic, "resultados_otimista_pyomo", 0.25, 0.5)
+
+        data_index_pessimistic = self._transform_data()
+        data_index_pessimistic = data_index_pessimistic.assign(
+                dy_medio = lambda x: x["dy_medio"] * 0.9,
+                dy_mad = lambda x: x["dy_mad"] * 1.10,
+                pr_mad = lambda x: x["pr_mad"] * 1.20
+        )
+        self._get_results(data_index_pessimistic, "resultados_pessimista_pyomo", 0.15, 0.4)
+
 
     def _transform_data(self) -> pd.DataFrame:
         """ Process excel files
@@ -101,15 +119,15 @@ class OptimizeDY:
             raise OSError(error) from error
 
 
-    def __pyo_optimize(self) -> pyo.ConcreteModel:
+    def _pyo_optimize(self, weight_vector: np.array, 
+                       returns_vector: np.array,
+                       data_index: pd.DataFrame,
+                       individua_max_concentration: float,
+                       sector_max_concentration: float) -> pyo.ConcreteModel:
         """optimize dys
         return model's results"""
 
         # important initial configurations
-
-        data_index = self._transform_data()
-
-        weight_vector = self._get_weighs()
 
         try:
             dy_mad_vector = np.array(data_index["dy_mad"])
@@ -124,15 +142,16 @@ class OptimizeDY:
 
             all_assets = financials + electricals + others
 
-            returns_dict = {ticker:dy for ticker, dy in zip(data_index["ticker"], data_index["dy_medio"])}
-            dy_mad_dict = {ticker:dy for ticker, dy in zip(data_index["ticker"], data_index["dy_mad"])}
-            pr_mad_dict = {ticker:dy for ticker, dy in zip(data_index["ticker"], data_index["pr_mad"])}
+            returns_dict = {ticker:dy for ticker, dy in zip(data_index["ticker"], returns_vector)}
+            dy_mad_dict = {ticker:mad for ticker, mad in zip(data_index["ticker"], data_index["dy_mad"])}
+            pr_mad_dict = {ticker:mad for ticker, mad in zip(data_index["ticker"], data_index["pr_mad"])}
         
         except Exception as error:
             raise OSError(error) from error
         
         # building model
         model = pyo.ConcreteModel()
+        model.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
 
         try:
             model.weight = pyo.Var(all_assets, domain=pyo.NonNegativeReals)
@@ -147,13 +166,13 @@ class OptimizeDY:
             model.cons.add(expr=sum([model.weight[weight] for weight in model.weight]) == 1)
 
             for weight in model.weight:
-                model.cons.add(expr= model.weight[weight] <= 0.20)
+                model.cons.add(expr= model.weight[weight] <= individua_max_concentration)
 
-            model.cons.add(sum([model.weight[asset] for asset in financials]) <= 0.50)
+            model.cons.add(sum([model.weight[asset] for asset in financials]) <= sector_max_concentration)
             
-            model.cons.add(sum([model.weight[asset] for asset in electricals]) <= 0.50)
+            model.cons.add(sum([model.weight[asset] for asset in electricals]) <= sector_max_concentration)
             
-            model.cons.add(sum([model.weight[asset] for asset in others]) <= 0.50)
+            model.cons.add(sum([model.weight[asset] for asset in others]) <= sector_max_concentration)
 
             model.cons.add(expr=sum([model.weight[asset] * dy_mad_dict[asset] 
                                     for asset in all_assets]) <= dy_mad_indice)
@@ -166,30 +185,48 @@ class OptimizeDY:
         except Exception as error:
             raise OSError(error) from error
 
-    def _get_results(self) -> None:
+
+    def _get_results(self, data_index: pd.DataFrame, filename: str, 
+                     individua_max_concentration: float,
+                     sector_max_concentration: float) -> None:
         """Generate results
         spreadsheet
         return None"""
 
+        weight_vector = self._get_weighs()
+        returns_vector = data_index["dy_medio"]
 
         rfr = 0.06 # risk-free rate
-
-        model = self.__pyo_optimize()
+        
+        begin_time = time.time()
+        model = self._pyo_optimize(weight_vector, returns_vector, data_index, 
+                                   individua_max_concentration,
+                                   sector_max_concentration)
+        elapsed_time = time.time() - begin_time
 
         solver = pyo.SolverFactory("glpk")
         solver.solve(model)
 
+        optm_wallet = {str(key):model.weight[key]() 
+                         for key in model.weight.keys() if model.weight[key]() > 0}
+        
+        print(optm_wallet)
+
+        shadow_prices = {str(key):model.dual[key] 
+                         for key in model.dual.keys() if model.dual[key] > 0}
+
         sharpe_ratio = (model.returns() - rfr) / model.cons[25]()
 
-        dataframe = pd.DataFrame()
-        dataframe = dataframe.assign(
+        df_results = pd.DataFrame(data=shadow_prices, index = [0])
+        df_results = df_results.assign(
             retorno_carteira = [model.returns()],
             mad_dy_carteira = [model.cons[25]()],
             mad_preco_carteira = [model.cons[26]()],
             mad_total_carteira = lambda x: x["mad_dy_carteira"] + x["mad_preco_carteira"],
-            sharpe_ratio = [sharpe_ratio]
+            sharpe_ratio = [sharpe_ratio],
+            tempo_execucao = [elapsed_time]
         )
 
-        dataframe.to_excel(path.join(self.static.data_dir, "resultados_otimizacao.xlsx"), float_format="%.8f")
+        df_results.to_excel(path.join(self.static.data_results_dir, f"{filename}.xlsx"), float_format="%.8f")
 
         print("Results spreadsheet done")
